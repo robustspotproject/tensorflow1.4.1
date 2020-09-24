@@ -440,6 +440,8 @@ typedef AutoTuneSingleton<ConvAutoTuneGroup, ConvParameters,
                           perftools::gputools::dnn::AlgorithmConfig>
     AutoTuneConv;
 
+
+// ARC::Conv2Dops start
 template <typename T>
 void LaunchConv2DOp<GPUDevice, T>::operator()(
     OpKernelContext* ctx, bool use_cudnn, bool cudnn_use_autotune,
@@ -660,54 +662,57 @@ void LaunchConv2DOp<GPUDevice, T>::operator()(
       device_id,         // device_id
   };
   AlgorithmConfig algorithm_config;
-  if (cudnn_use_autotune &&
-      !AutoTuneConv::GetInstance()->Find(conv_parameters, &algorithm_config)) {
-    std::vector<AlgorithmDesc> algorithms;
-    CHECK(stream->parent()->GetConvolveAlgorithms(
-        conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(), &algorithms));
-    ProfileResult best_result;
-    ProfileResult best_result_no_scratch;
-    for (auto profile_algorithm : algorithms) {
-      // TODO(zhengxq): profile each algorithm multiple times to better
-      // accuracy.
-      CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
-      ProfileResult profile_result;
-      bool cudnn_launch_status =
-          stream
-              ->ThenConvolveWithAlgorithm(
-                  input_desc, input_ptr, filter_desc, filter_ptr, conv_desc,
-                  output_desc, &output_ptr, &scratch_allocator,
-                  AlgorithmConfig(profile_algorithm), &profile_result)
-              .ok();
-      if (cudnn_launch_status) {
-        if (profile_result.is_valid()) {
-          if (profile_result.elapsed_time_in_ms() <
-              best_result.elapsed_time_in_ms()) {
-            best_result = profile_result;
-          }
-          if (scratch_allocator.TotalByteSize() == 0 &&
-              profile_result.elapsed_time_in_ms() <
-                  best_result_no_scratch.elapsed_time_in_ms()) {
-            best_result_no_scratch = profile_result;
-          }
-        }
-      }
-    }
-    // TODO(yangzihao): refactor the profile result checking code into a common
-    // utility function.
-    OP_REQUIRES(ctx,
-                best_result.is_valid() || best_result_no_scratch.is_valid(),
-                errors::NotFound("No algorithm worked!"));
-    if (best_result.is_valid()) {
-      algorithm_config.set_algorithm(best_result.algorithm());
-    }
-    if (best_result_no_scratch.is_valid()) {
-      algorithm_config.set_algorithm_no_scratch(
-          best_result_no_scratch.algorithm());
-    }
-    AutoTuneConv::GetInstance()->Insert(conv_parameters, algorithm_config);
-  }
+  // ARC::Comment out codes for cudnn algorithm profiling
+  // if (cudnn_use_autotune &&
+  //     !AutoTuneConv::GetInstance()->Find(conv_parameters, &algorithm_config)) {
+  //   std::vector<AlgorithmDesc> algorithms;
+  //   CHECK(stream->parent()->GetConvolveAlgorithms(
+  //       conv_parameters.ShouldIncludeWinogradNonfusedAlgo<T>(), &algorithms));
+  //   ProfileResult best_result;
+  //   ProfileResult best_result_no_scratch;
+  //   for (auto profile_algorithm : algorithms) {
+  //     // TODO(zhengxq): profile each algorithm multiple times to better
+  //     // accuracy.
+  //     CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
+  //     ProfileResult profile_result;
+  //     bool cudnn_launch_status =
+  //         stream
+  //             ->ThenConvolveWithAlgorithm(
+  //                 input_desc, input_ptr, filter_desc, filter_ptr, conv_desc,
+  //                 output_desc, &output_ptr, &scratch_allocator,
+  //                 AlgorithmConfig(profile_algorithm), &profile_result)
+  //             .ok();
+  //     if (cudnn_launch_status) {
+  //       if (profile_result.is_valid()) {
+  //         if (profile_result.elapsed_time_in_ms() <
+  //             best_result.elapsed_time_in_ms()) {
+  //           best_result = profile_result;
+  //         }
+  //         if (scratch_allocator.TotalByteSize() == 0 &&
+  //             profile_result.elapsed_time_in_ms() <
+  //                 best_result_no_scratch.elapsed_time_in_ms()) {
+  //           best_result_no_scratch = profile_result;
+  //         }
+  //       }
+  //     }
+  //   }
+  //   // TODO(yangzihao): refactor the profile result checking code into a common
+  //   // utility function.
+  //   OP_REQUIRES(ctx,
+  //               best_result.is_valid() || best_result_no_scratch.is_valid(),
+  //               errors::NotFound("No algorithm worked!"));
+  //   if (best_result.is_valid()) {
+  //     algorithm_config.set_algorithm(best_result.algorithm());
+  //   }
+  //   if (best_result_no_scratch.is_valid()) {
+  //     algorithm_config.set_algorithm_no_scratch(
+  //         best_result_no_scratch.algorithm());
+  //   }
+  //   AutoTuneConv::GetInstance()->Insert(conv_parameters, algorithm_config);
+  // }
 
+  // Caller of ARC::Convolve
+  // std::cout << "Convops" << std::endl;
   CudnnScratchAllocator scratch_allocator(ConvolveScratchSize, ctx);
   bool cudnn_launch_status =
       stream
